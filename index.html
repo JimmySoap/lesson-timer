@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f172a">
+  <title>Lesson timer · TeachAssist</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; }
+    body { font-family: -apple-system, "Segoe UI", Roboto, system-ui, sans-serif;
+      background: #0f172a; color: #fff; overflow: hidden; }
+    #wrap { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      text-align: center; padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom);
+      transition: background .4s ease; background: #1e293b; }
+    #wrap.green  { background: #15803d; }
+    #wrap.yellow { background: #b45309; }
+    #wrap.red    { background: #b91c1c; }
+    #wrap.none   { background: #1e293b; }
+    .hdr { position: absolute; top: calc(env(safe-area-inset-top) + 16px); font-size: 15px; font-weight: 600;
+      letter-spacing: .04em; opacity: .8; text-transform: uppercase; }
+    .status { font-size: clamp(15px, 5vw, 22px); font-weight: 600; opacity: .92; margin-bottom: 6px; }
+    .big { font-size: clamp(64px, 26vw, 200px); font-weight: 800; line-height: 1;
+      font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+    .label { font-size: clamp(14px, 4.5vw, 20px); opacity: .85; margin-top: 4px; letter-spacing: .02em; }
+    .foot { position: absolute; bottom: calc(env(safe-area-inset-bottom) + 20px);
+      font-size: clamp(13px, 4vw, 18px); opacity: .82; padding: 0 16px; }
+    .hw { display: inline-block; background: rgba(255,255,255,.22); border-radius: 8px;
+      padding: 1px 8px; font-size: .8em; margin-left: 6px; vertical-align: middle; }
+  </style>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.png">
+</head>
+<body>
+  <div id="wrap" class="none">
+    <div class="hdr">🎓 TeachAssist · <span id="day"></span></div>
+    <div class="status" id="status"></div>
+    <div class="big" id="big">—</div>
+    <div class="label" id="label"></div>
+    <div class="foot" id="foot"></div>
+  </div>
+
+  <script>
+    var SCHED = {"days": ["Mon", "Tue", "Wed", "Thu", "Fri"], "meta": {"campus": "Veng Sreng", "teacher": "T. David", "year": "2026-2027"}, "periods": [{"end": "09:40", "hw_days": ["Tue", "Thu"], "section": "10A", "start": "08:55", "subject": "Chemistry"}, {"end": "10:35", "hw_days": [], "section": "8A", "start": "09:50", "subject": "English"}, {"end": "11:30", "hw_days": ["Tue", "Thu"], "section": "10A", "start": "10:45", "subject": "Biology"}, {"end": "15:05", "hw_days": [], "section": "9A", "start": "14:20", "subject": "English"}, {"end": "16:00", "hw_days": ["Tue", "Thu"], "section": "7A", "start": "15:15", "subject": "English"}]};
+    var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    var wrap = document.getElementById('wrap');
+    var dayEl = document.getElementById('day'), statusEl = document.getElementById('status');
+    var bigEl = document.getElementById('big'), labelEl = document.getElementById('label'), footEl = document.getElementById('foot');
+
+    function toMin(t) { var p = t.split(':'); return (+p[0]) * 60 + (+p[1]); }
+    function clock(mFloat) {
+      var total = Math.max(0, Math.round(mFloat * 60));
+      var m = Math.floor(total / 60), s = total % 60;
+      return m + ':' + (s < 10 ? '0' : '') + s;
+    }
+    function fmtIn(m) {
+      if (m < 1) return 'starting now';
+      var t = Math.floor(m);
+      if (t < 60) return t + ' min';
+      var h = Math.floor(t / 60), r = t % 60;
+      return r ? (h + 'h ' + r + 'm') : (h + 'h');
+    }
+    function todayPeriods(name) {
+      if ((SCHED.days || []).indexOf(name) < 0) return [];
+      return (SCHED.periods || []).map(function (p) {
+        return { start: p.start, end: p.end, subject: p.subject, section: p.section,
+                 is_hw: (p.hw_days || []).indexOf(name) >= 0 };
+      });
+    }
+    function set(cls, status, big, label, foot) {
+      wrap.className = cls;
+      statusEl.textContent = status || '';
+      bigEl.textContent = big;
+      labelEl.innerHTML = label || '';
+      footEl.textContent = foot || '';
+    }
+    function tick() {
+      var d = new Date();
+      var name = DAYS[d.getDay()];
+      dayEl.textContent = name;
+      var now = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+      var periods = todayPeriods(name);
+      if (!periods.length) { set('none', '', 'No classes', 'Enjoy the day off', ''); return; }
+
+      var current = null, next = null;
+      for (var i = 0; i < periods.length; i++) {
+        var s = toMin(periods[i].start), e = toMin(periods[i].end);
+        if (s <= now && now < e) current = periods[i];
+        if (s > now && !next) next = periods[i];
+      }
+      if (current) {
+        var left = toMin(current.end) - now;
+        var cls = left <= 5 ? 'red' : (left <= 15 ? 'yellow' : 'green');
+        var hw = current.is_hw ? '<span class="hw">H.W</span>' : '';
+        set(cls, 'Now · ' + current.subject + ' ' + current.section,
+            left < 1 ? 'ending' : clock(left),
+            'time left' + hw,
+            'Ends ' + current.end + (next ? ('  ·  Next: ' + next.subject + ' ' + next.section + ' at ' + next.start) : '  ·  last class today'));
+        return;
+      }
+      if (!next) { set('none', '', 'Done', 'No more classes today', ''); return; }
+      var mins = toMin(next.start) - now;
+      var ncls = mins >= 60 ? 'green' : (mins >= 15 ? 'yellow' : 'red');
+      set(ncls, 'Next · ' + next.subject + ' ' + next.section,
+          fmtIn(mins), 'until it starts',
+          next.start + '–' + next.end + (next.is_hw ? '  · H.W' : ''));
+    }
+    tick();
+    setInterval(tick, 1000);
+  </script>
+  <script>if("serviceWorker" in navigator){navigator.serviceWorker.register("sw.js").catch(function(){});}</script>
+</body>
+</html>
