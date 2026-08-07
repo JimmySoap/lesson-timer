@@ -19,7 +19,8 @@
     #wrap.green  { background: #15803d; }
     #wrap.yellow { background: #b45309; }
     #wrap.red    { background: #b91c1c; }
-    #wrap.break  { background: #3730a3; }
+    #wrap.break  { background: #3730a3; }   /* named break (Lunch) — indigo */
+    #wrap.gap    { background: #0e7490; }   /* free gap between classes — teal */
     #wrap.none   { background: #1e293b; }
     .hdr { position: absolute; top: calc(env(safe-area-inset-top) + 16px); font-size: 15px; font-weight: 600;
       letter-spacing: .04em; opacity: .8; text-transform: uppercase; }
@@ -77,6 +78,12 @@
       return out;
     }
     function blockLabel(b) { return b.kind === 'break' ? b.label : (b.subject + ' ' + b.section); }
+    function untilBig(m) {          // MM:SS under an hour, else "Xh Ym"
+      if (m < 1) return 'now';
+      if (m < 60) return clock(m);
+      var h = Math.floor(m / 60), r = Math.floor(m % 60);
+      return r ? (h + 'h ' + r + 'm') : (h + 'h');
+    }
     function set(cls, status, big, label, foot) {
       wrap.className = cls;
       statusEl.textContent = status || '';
@@ -113,9 +120,8 @@
       }
       if (!next) { set('none', '', 'Done', 'No more classes today', ''); return; }
       var mins = toMin(next.start) - now;
-      var ncls = mins >= 60 ? 'green' : (mins >= 15 ? 'yellow' : 'red');
-      set(ncls, 'Next · ' + blockLabel(next), fmtIn(mins), 'until it starts',
-          next.start + '–' + next.end + (next.kind === 'class' && next.is_hw ? '  · H.W' : ''));
+      set('gap', 'Break', untilBig(mins), 'until next class',
+          'Next: ' + blockLabel(next) + ' at ' + next.start + (next.kind === 'class' && next.is_hw ? '  · H.W' : ''));
     }
     tick();
     setInterval(tick, 1000);
