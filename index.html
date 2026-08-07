@@ -19,6 +19,7 @@
     #wrap.green  { background: #15803d; }
     #wrap.yellow { background: #b45309; }
     #wrap.red    { background: #b91c1c; }
+    #wrap.break  { background: #3730a3; }
     #wrap.none   { background: #1e293b; }
     .hdr { position: absolute; top: calc(env(safe-area-inset-top) + 16px); font-size: 15px; font-weight: 600;
       letter-spacing: .04em; opacity: .8; text-transform: uppercase; }
@@ -44,7 +45,7 @@
   </div>
 
   <script>
-    var SCHED = {"days": ["Mon", "Tue", "Wed", "Thu", "Fri"], "meta": {"campus": "Veng Sreng", "teacher": "T. David", "year": "2026-2027"}, "periods": [{"end": "09:40", "hw_days": ["Tue", "Thu"], "section": "10A", "start": "08:55", "subject": "Chemistry"}, {"end": "10:35", "hw_days": [], "section": "8A", "start": "09:50", "subject": "English"}, {"end": "11:30", "hw_days": ["Tue", "Thu"], "section": "10A", "start": "10:45", "subject": "Biology"}, {"end": "15:05", "hw_days": [], "section": "9A", "start": "14:20", "subject": "English"}, {"end": "16:00", "hw_days": ["Tue", "Thu"], "section": "7A", "start": "15:15", "subject": "English"}]};
+    var SCHED = {"breaks": [{"end": "12:30", "label": "Lunch", "start": "11:30"}], "days": ["Mon", "Tue", "Wed", "Thu", "Fri"], "meta": {"campus": "Veng Sreng", "teacher": "T. David", "year": "2026-2027"}, "periods": [{"end": "09:40", "hw_days": ["Tue", "Thu"], "section": "10A", "start": "08:55", "subject": "Chemistry"}, {"end": "10:35", "hw_days": [], "section": "8A", "start": "09:50", "subject": "English"}, {"end": "11:30", "hw_days": ["Tue", "Thu"], "section": "10A", "start": "10:45", "subject": "Biology"}, {"end": "15:05", "hw_days": [], "section": "9A", "start": "14:20", "subject": "English"}, {"end": "16:00", "hw_days": ["Tue", "Thu"], "section": "7A", "start": "15:15", "subject": "English"}]};
     var DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     var wrap = document.getElementById('wrap');
     var dayEl = document.getElementById('day'), statusEl = document.getElementById('status');
@@ -63,13 +64,19 @@
       var h = Math.floor(t / 60), r = t % 60;
       return r ? (h + 'h ' + r + 'm') : (h + 'h');
     }
-    function todayPeriods(name) {
+    function todayBlocks(name) {
       if ((SCHED.days || []).indexOf(name) < 0) return [];
-      return (SCHED.periods || []).map(function (p) {
-        return { start: p.start, end: p.end, subject: p.subject, section: p.section,
+      var out = (SCHED.periods || []).map(function (p) {
+        return { start: p.start, end: p.end, kind: 'class', subject: p.subject, section: p.section,
                  is_hw: (p.hw_days || []).indexOf(name) >= 0 };
       });
+      (SCHED.breaks || []).forEach(function (b) {
+        out.push({ start: b.start, end: b.end, kind: 'break', label: b.label || 'Break' });
+      });
+      out.sort(function (a, b) { return toMin(a.start) - toMin(b.start); });
+      return out;
     }
+    function blockLabel(b) { return b.kind === 'break' ? b.label : (b.subject + ' ' + b.section); }
     function set(cls, status, big, label, foot) {
       wrap.className = cls;
       statusEl.textContent = status || '';
@@ -82,31 +89,33 @@
       var name = DAYS[d.getDay()];
       dayEl.textContent = name;
       var now = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
-      var periods = todayPeriods(name);
-      if (!periods.length) { set('none', '', 'No classes', 'Enjoy the day off', ''); return; }
+      var blocks = todayBlocks(name);
+      if (!blocks.length) { set('none', '', 'No classes', 'Enjoy the day off', ''); return; }
 
       var current = null, next = null;
-      for (var i = 0; i < periods.length; i++) {
-        var s = toMin(periods[i].start), e = toMin(periods[i].end);
-        if (s <= now && now < e) current = periods[i];
-        if (s > now && !next) next = periods[i];
+      for (var i = 0; i < blocks.length; i++) {
+        var s = toMin(blocks[i].start), e = toMin(blocks[i].end);
+        if (s <= now && now < e) current = blocks[i];
+        if (s > now && !next) next = blocks[i];
       }
       if (current) {
         var left = toMin(current.end) - now;
+        var nextTxt = next ? ('  ·  Next: ' + blockLabel(next) + ' at ' + next.start) : '  ·  last today';
+        if (current.kind === 'break') {
+          set('break', current.label, left < 1 ? 'over' : clock(left), 'left', 'Ends ' + current.end + nextTxt);
+          return;
+        }
         var cls = left <= 5 ? 'red' : (left <= 15 ? 'yellow' : 'green');
         var hw = current.is_hw ? '<span class="hw">H.W</span>' : '';
         set(cls, 'Now · ' + current.subject + ' ' + current.section,
-            left < 1 ? 'ending' : clock(left),
-            'time left' + hw,
-            'Ends ' + current.end + (next ? ('  ·  Next: ' + next.subject + ' ' + next.section + ' at ' + next.start) : '  ·  last class today'));
+            left < 1 ? 'ending' : clock(left), 'time left' + hw, 'Ends ' + current.end + nextTxt);
         return;
       }
       if (!next) { set('none', '', 'Done', 'No more classes today', ''); return; }
       var mins = toMin(next.start) - now;
       var ncls = mins >= 60 ? 'green' : (mins >= 15 ? 'yellow' : 'red');
-      set(ncls, 'Next · ' + next.subject + ' ' + next.section,
-          fmtIn(mins), 'until it starts',
-          next.start + '–' + next.end + (next.is_hw ? '  · H.W' : ''));
+      set(ncls, 'Next · ' + blockLabel(next), fmtIn(mins), 'until it starts',
+          next.start + '–' + next.end + (next.kind === 'class' && next.is_hw ? '  · H.W' : ''));
     }
     tick();
     setInterval(tick, 1000);
